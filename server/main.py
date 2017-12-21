@@ -6,19 +6,29 @@ serv.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 serv.bind(('', 4097))
 serv.listen(5)
 
+dest = datetime.datetime.now().isoformat()
+count = 0
+
 while True:
 	sock, _ = serv.accept()
 	def recv(num):
-		data = ''
-		while len(data) < num:
-			data += sock.recv(num - len(data))
-		return data
+		try:
+			data = ''
+			while len(data) < num:
+				data += sock.recv(num - len(data))
+			return data
+		except:
+			return None
 	print 'New connection'
-	dest = datetime.datetime.now().isoformat()
-	count = 0
 	while True:
-		cmd = ord(sock.recv(1))
-		if cmd == 0:
+		try:
+			cmd = ord(sock.recv(1))
+		except:
+			cmd = None
+		print 'Command', cmd
+		if cmd is None:
+			break
+		elif cmd == 0:
 			print 'New recording'
 			dest = datetime.datetime.now().isoformat()
 			count = 0
@@ -39,6 +49,6 @@ while True:
 		elif cmd == 3:
 			wav.close()
 		else:
-			print 'WTF?', cmd
+			print 'Unknown command'
 			break
 

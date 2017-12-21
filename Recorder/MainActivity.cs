@@ -22,31 +22,46 @@ namespace Recorder
             var newButton = FindViewById<Button>(Resource.Id.newRecording);
             var recordButton = FindViewById<Button>(Resource.Id.record);
 
-            var sock = new TcpClient("192.168.1.7", 4097);
-            var stream = sock.GetStream();
-            var audioSource = new AudioRecord(AudioSource.Mic, 44100, ChannelIn.Mono, Encoding.Pcm16bit, 44100*5);
+            TcpClient sock;
+            NetworkStream stream = null;
+            var audioSource = new AudioRecord(AudioSource.Mic, 44100, ChannelIn.Mono, Encoding.Pcm16bit, 44100 * 5);
+
+            void EnsureConnection(Func<bool> ctx) {
+                sock = new TcpClient("192.168.1.7", 4097);
+                stream = sock.GetStream();
+                if(!ctx()) {
+                    stream.Close();
+                    sock.Close();
+                }
+            }
 
             newButton.Click += (_, e) => {
-                stream.WriteByte(0);
+                EnsureConnection(() => {
+                    stream.WriteByte(0);
+                    return true;
+                });
             };
             recordButton.Touch += (_, e) => {
                 switch(e.Event.Action) {
                     case Android.Views.MotionEventActions.Down:
-                        stream.WriteByte(2);
                         var buffer = new short[4410];
                         new Thread(() => {
-                            audioSource.StartRecording();
-                            while(true) {
-                                var count = audioSource.Read(buffer, 0, 4410);
-                                if(count <= 0)
-                                    break;
-                                stream.WriteByte(1);
-                                stream.WriteByte((byte) (count & 0xFF));
-                                stream.WriteByte((byte) (count >> 8));
-                                var data = buffer.Select(x => BitConverter.GetBytes(x)).SelectMany(i => i).ToArray();
-                                stream.Write(data, 0, count * 2);
-                            }
-                            stream.WriteByte(3);
+                            EnsureConnection(() => {
+                                stream.WriteByte(2);
+                                audioSource.StartRecording();
+                                while (true) {
+                                    var count = audioSource.Read(buffer, 0, 4410);
+                                    if (count <= 0)
+                                        break;
+                                    stream.WriteByte(1);
+                                    stream.WriteByte((byte)(count & 0xFF));
+                                    stream.WriteByte((byte)(count >> 8));
+                                    var data = buffer.Select(x => BitConverter.GetBytes(x)).SelectMany(i => i).ToArray();
+                                    stream.Write(data, 0, count * 2);
+                                }
+                                stream.WriteByte(3);
+                                return false;
+                            });
                         }).Start();
                         break;
                     case Android.Views.MotionEventActions.Up:
